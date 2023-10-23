@@ -7,14 +7,13 @@ import websockets
 async def get_auth_token(websocket):
     auth_file = Path("extensions", "vtube_studio", "auth_token.txt")
     try:
-        if auth_file.is_file():
-            with open(auth_file, "r") as token_file:
-                # print(f"Reading authentication token from {auth_file}")
-                auth_token = token_file.read().strip()
-            # print(f"Found authentication token in {auth_file}")
-            if auth_token is None:
-                raise FileNotFoundError
-        else:
+        if not auth_file.is_file():
+            raise FileNotFoundError
+        with open(auth_file, "r") as token_file:
+            # print(f"Reading authentication token from {auth_file}")
+            auth_token = token_file.read().strip()
+        # print(f"Found authentication token in {auth_file}")
+        if auth_token is None:
             raise FileNotFoundError
     except FileNotFoundError:
         print("No authentication token found. Generating one...")
@@ -61,9 +60,8 @@ async def authenticate(websocket, auth_token):
     if response["messageType"] == "AuthenticationResponse" and response["data"]["authenticated"]:
         # print("Plugin authenticated for the duration of this session")
         return True
-    else:
-        print("Authentication failed:", json.dumps(response, indent=4))
-        return False
+    print("Authentication failed:", json.dumps(response, indent=4))
+    return False
 
 
 # Get the current model ID
@@ -198,11 +196,10 @@ async def get_models(websocket):
     await websocket.send(json.dumps(message))
     result = await websocket.recv()
     data = json.loads(result)
-    # print(json.dumps(data, indent=4))
-    models = {}
-    for item in data['data']["availableModels"]:
-        models[item['modelName']] = item['modelID']
-    return models
+    return {
+        item['modelName']: item['modelID']
+        for item in data['data']["availableModels"]
+    }
 
 
 async def load_model(websocket, model_name):

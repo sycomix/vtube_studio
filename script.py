@@ -22,13 +22,11 @@ websocket = None
 
 
 async def get_os():
-    if 'wsl2' and 'microsoft' in str(platform.uname()).lower():
-        print('Running in WSL, using hostname.local because WSL uses a virtual network')
-        host = f'{platform.uname().node}.local'
-    else:
+    if not 'wsl2' or 'microsoft' not in str(platform.uname()).lower():
         # print('Not running in WSL')
-        host = platform.uname().node
-    return host
+        return platform.uname().node
+    print('Running in WSL, using hostname.local because WSL uses a virtual network')
+    return f'{platform.uname().node}.local'
 
 
 async def connect():
@@ -62,9 +60,6 @@ async def connect():
     # If authentication failed, exit
     if not auth_response:
         raise Exception('Plugin authentication failed!')
-    else:
-        # print('Plugin authentication successful (VTube_Studio_API.py)')
-        pass
 
 
 async def disconnect(x):
@@ -92,8 +87,7 @@ async def update_menus():
 
 # play the hotkey in VTube Studio
 async def play_hotkey(hotkey):
-    result = await vtube_studio_functions.execute_hotkey(websocket, hotkey)
-    return result
+    return await vtube_studio_functions.execute_hotkey(websocket, hotkey)
 
 
 #  get the list of available animations and expressions from VTube Studio
@@ -114,11 +108,23 @@ async def get_available_hotkeys(model_id=None):
     else:
         params.update({'expression': None})
 
-    return [gr.update(choices=animation_list, value=params['animation'], interactive=True if params['animation'] else False),
-            gr.update(choices=expression_list, value=params['expression'],  interactive=True if params['expression'] else False),
-            gr.update(interactive=True if params['animation'] else False),
-            gr.update(interactive=True if params['expression'] else False),
-            gr.update(interactive=True if params['animation'] or params['expression'] else False)]
+    return [
+        gr.update(
+            choices=animation_list,
+            value=params['animation'],
+            interactive=bool(params['animation']),
+        ),
+        gr.update(
+            choices=expression_list,
+            value=params['expression'],
+            interactive=bool(params['expression']),
+        ),
+        gr.update(interactive=bool(params['animation'])),
+        gr.update(interactive=bool(params['expression'])),
+        gr.update(
+            interactive=bool(params['animation'] or params['expression'])
+        ),
+    ]
 
 
 async def get_models():
@@ -131,14 +137,17 @@ async def get_models():
         params.update({'model': list(model_dict.keys())[list(model_dict.values()).index(current_model)]})
     else:
         params.update({'model': None})
-    return gr.update(choices=list(model_dict.keys()), value=params['model']), gr.update(interactive=True if params['model'] else False),  gr.update(interactive=True if params['model'] else False)
+    return (
+        gr.update(choices=list(model_dict.keys()), value=params['model']),
+        gr.update(interactive=bool(params['model'])),
+        gr.update(interactive=bool(params['model'])),
+    )
 
 
 async def load_model(current_model):
     model_id = params['model_dict'][current_model]
     await vtube_studio_functions.load_model(websocket, model_id)
-    refreshed_hotkeys = await get_available_hotkeys(model_id)
-    return refreshed_hotkeys
+    return await get_available_hotkeys(model_id)
 
 
 def ui():
@@ -153,19 +162,26 @@ def ui():
 
         with gr.Row():
             model_dropdown = gr.Dropdown(choices=list(params['model_dict'].keys()), value=params['model'], label='VTuber Model')
-            model_load_button = gr.Button('Load Model', interactive=True if params['model'] else False)
+            model_load_button = gr.Button('Load Model', interactive=bool(params['model']))
 
-        model_refresh_button = gr.Button('Refresh',  interactive=True if params['model'] else False)
+        model_refresh_button = gr.Button('Refresh', interactive=bool(params['model']))
 
         with gr.Row():
             animations_dropdown = gr.Dropdown(choices=params['animation_list'], value=params['animation'], label='Animation')
-            animation_button = gr.Button('Play Animation', interactive=True if params['animation'] else False)
+            animation_button = gr.Button(
+                'Play Animation', interactive=bool(params['animation'])
+            )
 
         with gr.Row():
             expressions_dropdown = gr.Dropdown(choices=params['expression_list'], value=params['expression'], label='Expression')
-            expression_button = gr.Button('Play Expression',  interactive=True if params['expression'] else False)
+            expression_button = gr.Button(
+                'Play Expression', interactive=bool(params['expression'])
+            )
 
-        refresh_hotkeys_button = gr.Button('Refresh', interactive=True if params['animation'] or params['expression'] else False)
+        refresh_hotkeys_button = gr.Button(
+            'Refresh',
+            interactive=bool(params['animation'] or params['expression']),
+        )
 
     # Event functions to update the parameters in the backend
     activate.change(lambda x: params.update({'activate': x}), activate, None).then(fn=disconnect, inputs=activate, outputs=None)
